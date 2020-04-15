@@ -1,0 +1,124 @@
+import numpy as np
+from matplotlib import pyplot as plt
+from matplotlib import collections as collections
+from scipy import stats
+from scipy import special
+from scipy import integrate
+from scipy import optimize
+
+
+
+def gauss(x, mu, sigma):
+    return 1/(np.sqrt(2*np.pi)*sigma) * np.exp(-(x-mu)*(x-mu)/(2*sigma*sigma))
+
+
+def decay(x, tau):
+    return np.exp(-x/tau) / tau
+
+
+def chi2(mus, hist, bins, xmin=0, xmax=99, tau0=5.0, mu0=10.0, sigma0=3.0):
+    #
+    # here your lines of code are needed to replace the dummy one below
+    #      ___
+    #     /   \
+    #         |
+    #        /
+    #       /
+    #       
+    #       *
+    #
+    temp_x2 = 0.01*(mus-10)*(mus-10)+10
+    return temp_x2
+
+
+# Define known constants
+tau = 5.0
+mu = 10.0
+sigma = 3.0
+
+# Define some auxiliary parameters 
+plow = 0.0
+phig = 40.0
+ndistr = 1000
+
+# Deafine the histogram
+nbins = 10
+xrange = 30
+
+
+x = np.linspace(0, xrange, ndistr)
+
+# Load the raw data from file:
+rndy = np.load("raw_data_1_tau5.npy")
+nhist = len(rndy)
+
+# Find the p.d.f. normalisation factors for the considered interval (0, xrange) 
+integrals = integrate.quad(gauss, 0, xrange, args=(mu, sigma))
+#print('integrals = ', integrals[0])
+scales = 1/integrals[0]
+integralb = integrate.quad(decay, 0, xrange, args=(tau,))
+#print('integralb = ', integralb[0])
+scaleb = 1/integralb[0]
+
+# Histogram the raw data
+hy, binsy = np.histogram(rndy, bins=nbins, range=(0.0, xrange) )
+
+# Find the extremum of either logL or chi2
+in_guess = [0,]
+minimum = optimize.minimize(chi2, in_guess, args=(hy, binsy ,0.0, xrange, tau, mu, sigma))
+fitted_mus = minimum.x[0]
+print('extremum found for mus = ',fitted_mus)
+
+
+# Set dummy uncertainties
+sigma_neg = fitted_mus-10
+sigma_pos = fitted_mus+10
+#  Estimate the error:
+pl = np.linspace(plow, phig, ndistr)
+ll_array = []
+for xx in pl:
+   ll_array.append(chi2(xx, hy, binsy, 0.0, xrange, tau, mu, sigma))
+#
+# here your lines of code are needed to find the fit standard deviation
+#      ___
+#     /   \
+#         |
+#        /
+#       /
+#       
+#       *
+#
+print("-sigma = %2.3f,  +sigma = %2.3f"%(sigma_neg, sigma_pos))
+
+
+
+# fitted p.d.f.:
+y = (fitted_mus/nhist*scales*gauss(x, mu, sigma)+(nhist-fitted_mus)/nhist*scaleb*decay(x, tau))
+ys = (fitted_mus/nhist*scales*gauss(x, mu, sigma))
+yb = ((nhist-fitted_mus)/nhist*scaleb*decay(x, tau))
+
+fig, ax = plt.subplots()
+
+ax.plot(rndy, np.zeros(rndy.shape), 'b+', ms=30, label="raw data")  # rug plot
+ax.hist(rndy, bins=nbins, range=(0.0, xrange), fill=False, color='green', label="histogram")  # histogram
+
+ax.plot(x, nhist*xrange*(1/nbins)*ys, 'r', linewidth=2, linestyle='--', label="Sig p.d.f.")
+ax.plot(x, nhist*xrange*(1/nbins)*yb, 'b', linewidth=2, linestyle='--', label="Bkg p.d.f.")
+ax.plot(x, nhist*xrange*(1/nbins)*y, 'r', alpha=0.5, linewidth=2, linestyle='-', label="Fitted p.d.f.")
+#ax.set_ylim(bottom=0)
+
+fig.text(0.70, 0.53, 'LS fit', fontsize=14)
+fig.text(0.70, 0.48, '%d events'%nhist, fontsize=14)
+fig.text(0.25, 0.80, '$N_S$ = %2.2f +%2.2f -%2.2f'%(fitted_mus,sigma_pos-fitted_mus,fitted_mus-sigma_neg), fontsize=14)
+#fig.text(0.25, 0.80, '$N_S$ = %2.2f'%(fitted_mus), fontsize=14)
+
+ax.spines['right'].set_visible(False)
+ax.spines['top'].set_visible(False)
+ax.xaxis.set_ticks_position('bottom')
+
+ax.legend(loc=1, fontsize=10)
+
+ax.set_xlabel('x')
+ax.set_ylabel('entries')
+
+plt.show()
